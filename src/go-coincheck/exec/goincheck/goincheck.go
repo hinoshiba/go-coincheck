@@ -6,16 +6,23 @@ import (
 	"fmt"
 	"net/http"
 	"flag"
+	"path/filepath"
 	"time"
 	"strconv"
+	"encoding/json"
 	"encoding/hex"
 	"crypto/sha256"
 	"crypto/hmac"
 )
 
+import (
+	"github.com/syndtr/goleveldb/leveldb"
+)
+
 var (
-	API_KEY string
+	API_KEY    string
 	SECRET_KEY string
+	DB_PATH    string
 )
 
 func die(s string, msg ...interface{}) {
@@ -26,36 +33,71 @@ func die(s string, msg ...interface{}) {
 func goincheck() error {
 	var base_url string = "https://coincheck.com/"
 
-	if err := get_rate(base_url); err != nil {
+	db, err := leveldb.OpenFile(DB_PATH, nil)
+	if err != nil {
 		return err
 	}
+	defer db.Close()
+
+	key := time.Now().Format("150405")
+
+	rate, err := get_rate(base_url)
+	if err != nil {
+		return err
+	}
+	if err := db.Put([]byte(key), []byte(rate.Rate), nil); err != nil {
+		return err
+	}
+
+/*
 	if err := get_history(base_url); err != nil {
 		return err
 	}
-	if err := get_balance(base_url); err != nil {
+	blnc, err := get_balance(base_url)
+	if err != nil {
 		return err
 	}
+	log.Println(blnc)
+*/
 	return nil
 }
 
-func get_rate(base_url string) error {
+type rate struct {
+	Rate string `json:"rate"`
+}
+
+func get_rate(base_url string) (*rate, error) {
 	url := base_url + "api/rate/btc_jpy"
 	ret, err := request("GET", url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Printf("rate : %s\n", string(ret))
-	return nil
+
+	var r *rate
+	if err := json.Unmarshal(ret, &r); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
-func get_balance(base_url string) error {
+type balance struct {
+	Status bool   `json:"success"`
+	Jpy    string `json:"jpy"`
+	Btc    string `json:"btc"`
+}
+
+func get_balance(base_url string) (*balance, error) {
 	url := base_url + "api/accounts/balance"
 	ret, err := request("GET", url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Printf("balance : %s\n", string(ret))
-	return nil
+
+	var b *balance
+	if err := json.Unmarshal(ret, &b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 func get_history(base_url string) error {
@@ -108,8 +150,10 @@ func genhmac(msg string, key string) string {
 func init() {
 	var api_key string
 	var secret_key string
+	var db_path string
 	flag.StringVar(&api_key, "a", "", "your API KEY.")
 	flag.StringVar(&secret_key, "s", "", "your SECRET KEY.")
+	flag.StringVar(&db_path, "p", "./go-coincheck.ldb", "your SECRET KEY.")
 	flag.Parse()
 
 	if flag.NArg() < 0 {
@@ -121,6 +165,11 @@ func init() {
 	if secret_key == "" {
 		die("empty secret_key")
 	}
+	if db_path == "" {
+		die("empty db path")
+	}
+
+	DB_PATH = filepath.Clean(db_path)
 	API_KEY = api_key
 	SECRET_KEY = secret_key
 }
