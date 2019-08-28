@@ -36,73 +36,49 @@ func goincheck() error {
 		return err
 	}
 	return nil
-	return nil
 }
 
 func get_rate(base_url string) error {
-	url := base_url + "/api/rate/btc_jpy"
-	req, err := http.NewRequest("GET", url, nil)
+	url := base_url + "api/rate/btc_jpy"
+	ret, err := request("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	c := new(http.Client)
-	res, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-
-	b, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("rate : %s\n", string(b))
+	fmt.Printf("rate : %s\n", string(ret))
 	return nil
 }
 
 func get_balance(base_url string) error {
 	url := base_url + "api/accounts/balance"
-	req, err := http.NewRequest("GET", url, nil)
+	ret, err := request("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	t := time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-	an := strconv.FormatInt(t, 10)
-	body := ""
-
-	sig := genhmac(an + url + body, SECRET_KEY)
-
-	req.Header.Set("ACCESS-KEY", API_KEY)
-	req.Header.Set("ACCESS-NONCE", an)
-	req.Header.Set("ACCESS-SIGNATURE", sig)
-	req.Header.Add("content-type", "application/json")
-	req.Header.Add("cache-control", "no-cache")
-
-
-	c := new(http.Client)
-	res, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-
-	b, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("balance : %s\n", string(b))
+	fmt.Printf("balance : %s\n", string(ret))
 	return nil
 }
 
 func get_history(base_url string) error {
 	url := base_url + "api/exchange/orders/transactions_pagination"
-	req, err := http.NewRequest("GET", url, nil)
+	ret, err := request("GET", url, nil)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("hist : %s\n", string(ret))
+	return nil
+}
+
+func request(method string, url string, body []byte) ([]byte, error) {
+	if body == nil {
+		body = []byte{}
+	}
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, err
+	}
 	t := time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
 	an := strconv.FormatInt(t, 10)
-	body := ""
-
-	sig := genhmac(an + url + body, SECRET_KEY)
+	sig := genhmac(an + url + string(body), SECRET_KEY)
 
 	req.Header.Set("ACCESS-KEY", API_KEY)
 	req.Header.Set("ACCESS-NONCE", an)
@@ -110,19 +86,17 @@ func get_history(base_url string) error {
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("cache-control", "no-cache")
 
-
 	c := new(http.Client)
 	res, err := c.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Printf("history : %s\n", string(b))
-	return nil
+	return b, nil
 }
 
 func genhmac(msg string, key string) string {
